@@ -143,3 +143,26 @@ export const login = async (req, res) => {
     });
   }
 };
+
+// Logout user
+export const logout = async (req, res) => {
+  try {
+    // In a stateless JWT authentication system, the server doesn't need to do anything
+    // The client is responsible for removing the token
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+    
+    // Note: For enhanced security in a production environment, you might want to:
+    // 1. Implement a token blacklist using Redis or another cache
+    // 2. Use refresh tokens and revoke them on logout
+  } catch (err) {
+    console.error('Logout error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Something went wrong during logout'
+    });
+  }
+};

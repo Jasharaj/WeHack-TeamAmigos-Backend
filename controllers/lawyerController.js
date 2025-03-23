@@ -93,3 +93,25 @@ export const getAssignedCases = async (req, res) => {
     });
   }
 };
+
+// Get all lawyers for dropdown selection
+export const getAllLawyers = async (req, res) => {
+  try {
+    // Find all lawyers and only return necessary fields for dropdown
+    const lawyers = await Lawyer.find({})
+      .select('name email phone specialization')
+      .sort({ name: 1 });
+
+    res.status(200).json({
+      success: true,
+      message: 'Lawyers fetched successfully',
+      data: lawyers
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch lawyers. Please try again.'
+    });
+  }
+};

@@ -41,7 +41,7 @@ export const updateCitizenProfile = async (req, res) => {
     if (!citizen) {
       return res.status(404).json({
         success: false,
-        message: 'Citizen not found'
+        message: 'Citizen not founsd'
       });
     }
 
