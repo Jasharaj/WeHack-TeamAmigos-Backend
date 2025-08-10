@@ -6,8 +6,9 @@ const lawyerSchema = new mongoose.Schema({
     password: { type: String, required: true },
     phone: { type: String },
     role: { type: String, default: 'lawyer' },
-    // barId: { type: String, required: true }, // Mandatory for lawyers
-    // specialization: { type: String }, // Optional: Criminal, Civil, etc.
+    licenseNumber: { type: String, required: true }, // Bar license number - mandatory for lawyers
+    specialization: { type: String, required: true }, // Legal specialization
+    yearsOfExperience: { type: Number, default: 0 }, // Years of experience
     casesAssigned: [{ type: mongoose.Schema.Types.ObjectId, ref: "Case" }], // Cases assigned to the lawyer
     createdAt: { type: Date, default: Date.now }
 });

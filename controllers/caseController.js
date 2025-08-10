@@ -73,9 +73,27 @@ export const createCase = async (req, res) => {
 export const getAllCases = async (req, res) => {
   try {
     const { status, caseType } = req.query;
+    const userRole = req.role;
+    const userId = req.userId;
+    
     let filter = {};
+    
+    // If user is a lawyer, only show cases that are either:
+    // 1. Unassigned (no lawyer field or lawyer is null)
+    // 2. Assigned to this specific lawyer
+    if (userRole === 'lawyer') {
+      filter.$or = [
+        { lawyer: null },
+        { lawyer: { $exists: false } },
+        { lawyer: userId }
+      ];
+    }
+    // If user is a citizen, show only their cases
+    else if (userRole === 'citizen') {
+      filter.citizen = userId;
+    }
 
-    // Apply filters if provided
+    // Apply additional filters
     if (status) filter.status = status;
     if (caseType) filter.caseType = caseType;
 
@@ -177,7 +195,8 @@ export const updateCase = async (req, res) => {
 
 // Assign lawyer to a case (Accept or Reject)
 export const assignLawyer = async (req, res) => {
-  const { caseId, action } = req.body; // action can be 'accept' or 'reject'
+  const { action } = req.body; // action can be 'accept' or 'reject'
+  const caseId = req.params.id; // Get case ID from URL parameter
   const lawyerId = req.userId; // The lawyer making the decision
 
   if (!['accept', 'reject'].includes(action)) {
@@ -197,11 +216,12 @@ export const assignLawyer = async (req, res) => {
       });
     }
 
-    // Check if this lawyer is the one assigned to the case
+    // Check if this lawyer can act on this case
+    // Allow if: 1) No lawyer assigned yet, or 2) This lawyer is the assigned one
     if (existingCase.lawyer && existingCase.lawyer.toString() !== lawyerId) {
       return res.status(403).json({
         success: false,
-        message: 'You are not assigned to this case'
+        message: 'This case is assigned to another lawyer. You can only accept cases that are unassigned or specifically assigned to you.'
       });
     }
 
@@ -216,21 +236,33 @@ export const assignLawyer = async (req, res) => {
     // Update case based on lawyer's decision
     const newStatus = action === 'accept' ? 'in progress' : 'rejected';
     
+    let updateFields = { 
+      status: newStatus,
+      updatedAt: Date.now() 
+    };
+
+    // If accepting, assign the lawyer to the case
+    if (action === 'accept') {
+      updateFields.lawyer = lawyerId;
+    }
+
     const updatedCase = await Case.findByIdAndUpdate(
       caseId,
-      { 
-        $set: { 
-          status: newStatus,
-          updatedAt: Date.now() 
-        } 
-      },
+      { $set: updateFields },
       { new: true }
     )
       .populate('citizen', 'name email phone')
       .populate('lawyer', 'name email phone');
 
-    // If rejected, remove from lawyer's assigned cases
-    if (action === 'reject') {
+    // Update lawyer's assigned cases
+    if (action === 'accept') {
+      // Add case to lawyer's assigned cases if not already there
+      await Lawyer.findByIdAndUpdate(
+        lawyerId,
+        { $addToSet: { casesAssigned: caseId } }
+      );
+    } else if (action === 'reject') {
+      // Remove from lawyer's assigned cases if rejecting
       await Lawyer.findByIdAndUpdate(
         lawyerId,
         { $pull: { casesAssigned: caseId } }

@@ -14,7 +14,7 @@ const generateToken = (user) => {
 
 // Register a new user (citizen or lawyer)
 export const register = async (req, res) => {
-  const { name, email, password, phone, role } = req.body;
+  const { name, email, password, phone, role, licenseNumber, specialization, yearsOfExperience } = req.body;
 
   try {
     let user = null;
@@ -24,6 +24,17 @@ export const register = async (req, res) => {
       user = await Citizen.findOne({ email });
     } else if (role === 'lawyer') {
       user = await Lawyer.findOne({ email });
+      
+      // Check if license number already exists for lawyers
+      if (!user && licenseNumber) {
+        const existingLawyer = await Lawyer.findOne({ licenseNumber });
+        if (existingLawyer) {
+          return res.status(400).json({
+            success: false,
+            message: 'Lawyer with this license number already exists'
+          });
+        }
+      }
     } else {
       return res.status(400).json({
         success: false,
@@ -37,6 +48,22 @@ export const register = async (req, res) => {
         success: false,
         message: `${role.charAt(0).toUpperCase() + role.slice(1)} already exists with this email`
       });
+    }
+
+    // Validate lawyer-specific required fields
+    if (role === 'lawyer') {
+      if (!licenseNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'License number is required for lawyers'
+        });
+      }
+      if (!specialization) {
+        return res.status(400).json({
+          success: false,
+          message: 'Specialization is required for lawyers'
+        });
+      }
     }
 
     // Hash password
@@ -60,15 +87,26 @@ export const register = async (req, res) => {
         email,
         password: hashedPassword,
         phone,
-        role
+        role,
+        licenseNumber,
+        specialization,
+        yearsOfExperience: yearsOfExperience || 0
       });
     }
 
     await user.save();
 
+    // Generate token for immediate login
+    const token = generateToken(user);
+
+    // Remove password from response
+    const { password: _, ...userData } = user._doc;
+
     res.status(201).json({
       success: true,
-      message: `${role.charAt(0).toUpperCase() + role.slice(1)} registered successfully`
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} registered successfully`,
+      token,
+      user: userData
     });
   } catch (err) {
     console.error(err);
@@ -81,7 +119,7 @@ export const register = async (req, res) => {
 
 // Login user (citizen or lawyer)
 export const login = async (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password, role, licenseNumber } = req.body;
 
   try {
     let user = null;
@@ -91,6 +129,14 @@ export const login = async (req, res) => {
       user = await Citizen.findOne({ email });
     } else if (role === 'lawyer') {
       user = await Lawyer.findOne({ email });
+      
+      // Additional validation for lawyers with license number
+      if (user && licenseNumber && user.licenseNumber !== licenseNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'License number does not match our records'
+        });
+      }
     } else {
       return res.status(400).json({
         success: false,
@@ -132,8 +178,7 @@ export const login = async (req, res) => {
       success: true,
       message: 'Login successful',
       token,
-      data: userData,
-      role
+      user: userData
     });
   } catch (err) {
     console.error(err);
@@ -163,6 +208,70 @@ export const logout = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Something went wrong during logout'
+    });
+  }
+};
+
+// Get all registered users (citizens and lawyers) - for debugging/admin purposes
+export const getAllUsers = async (req, res) => {
+  try {
+    // Fetch all citizens
+    const citizens = await Citizen.find({}, { password: 0 }).lean();
+    
+    // Fetch all lawyers
+    const lawyers = await Lawyer.find({}, { password: 0 }).lean();
+    
+    // Add role field to distinguish between user types
+    const citizensWithRole = citizens.map(citizen => ({ ...citizen, userType: 'citizen' }));
+    const lawyersWithRole = lawyers.map(lawyer => ({ ...lawyer, userType: 'lawyer' }));
+    
+    // Return the data
+    return res.status(200).json({
+      success: true,
+      message: 'All users fetched successfully',
+      data: {
+        citizens: citizensWithRole,
+        lawyers: lawyersWithRole,
+        totalCitizens: citizens.length,
+        totalLawyers: lawyers.length,
+        totalUsers: citizens.length + lawyers.length
+      }
+    });
+    
+  } catch (err) {
+    console.error('Error fetching all users:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Something went wrong while fetching users'
+    });
+  }
+};
+
+// Delete all users from database - for development/testing purposes
+export const deleteAllUsers = async (req, res) => {
+  try {
+    // Delete all citizens
+    const citizenDeleteResult = await Citizen.deleteMany({});
+    
+    // Delete all lawyers
+    const lawyerDeleteResult = await Lawyer.deleteMany({});
+    
+    
+    return res.status(200).json({
+      success: true,
+      message: 'All users deleted successfully',
+      data: {
+        citizensDeleted: citizenDeleteResult.deletedCount,
+        lawyersDeleted: lawyerDeleteResult.deletedCount,
+        totalDeleted: citizenDeleteResult.deletedCount + lawyerDeleteResult.deletedCount
+      }
+    });
+    
+  } catch (err) {
+    console.error('Error deleting all users:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Something went wrong while deleting users'
     });
   }
 };
