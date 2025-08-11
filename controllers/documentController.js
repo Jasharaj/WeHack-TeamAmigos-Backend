@@ -1,7 +1,7 @@
 import Document from '../models/DocumentSchema.js';
 import multer from 'multer';
 import cloudinary from '../config/cloudinary.js';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import { CloudinaryStorage } from '@fluidjs/multer-cloudinary';
 
 // Configure multer with Cloudinary storage
 const storage = new CloudinaryStorage({
